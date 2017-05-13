@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<vector>
 #include<bitset>
+#include<bits/stdc++.h>
 #include<map>
 using namespace std;
 
@@ -23,15 +24,14 @@ class Swombat{
 
     map<string,int> index_of_registers;//cada registrador tem um indice correspondente (uso geral de 0 a 7)
     vector<int> memory;//conteudo da memoria
-    vector<bool> free_memory;//posicoes livres da memoria
     int mem_size;//tamanho da memoria
-    vector<int> stack;//pilha
-    vector<int> content_of_registers;//conteudo dos registradores
     map<string,int> data_to_pos;
     map<string,int> label_to_pos;
+    int last_free;
 
   public:
 
+    int next_instruction;
     void generate_indexes()
     {
       for(int i = 0;i <= 7;i++)
@@ -44,14 +44,23 @@ class Swombat{
 
     void get_started()
     {
+      next_instruction = 0;
+      last_free = mem_size - 3;
       mem_size = 256;
       generate_indexes();
       memory.resize(mem_size,0);
-      stack.resize(127,0);
-      content_of_registers.resize(8,0);
-      free_memory.resize(mem_size,1);
     }
-    
+
+    bool islabel(string &s)
+    {
+      return label_to_pos.count(s);
+    }
+
+    bool isdata(string &s)
+    {
+      return data_to_pos.count(s);
+    }
+
     int get_reg_index(string &s)
     {
       return index_of_registers[s];
@@ -71,13 +80,41 @@ class Swombat{
     {
       if(!label.empty())
       {
-          
+        label_to_pos[label] = next_instruction;
+      }
+      memory[next_instruction] = (graphic>>8);
+      memory[next_instruction+1] = graphic%(1<<8);
+      next_instruction += 2;
+    }
+    
+    void solve_pendencies(vector< pair< int, string> > &label_pendencies, vector< pair< int, string> > &data_pendencies)
+    {
+      for(auto pend : label_pendencies)
+      {
+        memory[pend.first+1] += get_addr_from_label(pend.second);
+      }
+      
+      for(auto pend : data_pendencies)
+      {
+        memory[pend.first] += memory[get_addr_from_data(pend.second)];
       }
     }
 
-    void allocate(string label, int num_bytes, int value)
+    void allocate(string &label, int num_bytes, int value)
     {
-      
+      if(num_bytes==0) return;
+      else if(num_bytes==1) data_to_pos[label]=last_free;
+      memory[last_free--]=value%(1<<8);
+      allocate(label, num_bytes-1,(value>>8));
+    }
+
+    void print()
+    {
+      for(int v : memory)
+      {
+        bitset<8> to_print(v);
+        cout<<to_print<<endl;
+      }
     }
 };
 
@@ -110,27 +147,56 @@ int string_to_int(string &s)
   return ret;
 }
 
-void assemble(Swombat &OurMachine, string &label, string &instr)
+void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< int, string > > &label_pendencies, vector< pair< int, string > > &data_pendencies)
 {
-  int graphic,op;
+  cerr<<"instruction is "<<instr<<endl;
+  int graphic = 0,op = 0;
   if(instr == "exit") graphic = 0;
-  else if(instr == "loadi" or instr == "storei" or instr == "jmpz" or instr == "jmpn")
+  else if(instr == "loadi" or instr == "storei")
   {
     string tmp,reg;
-    int addr;
+    int addr=0;
     op = 1;
 
     if(instr == "storei") op = 2;
-    else if(instr == "jmpz") op = 7;
-    else if(instr == "jmpn") op = 8;
 
     cin>>reg;
     cin>>tmp;
 
     if(numerical(tmp)) addr = string_to_int(tmp);
-    else addr = OurMachine.get_addr_from_data(tmp);
+    else
+    {
+      if(OurMachine.isdata(tmp))
+      {
+        addr = OurMachine.get_addr_from_data(tmp);
+      }
+      else data_pendencies.push_back(make_pair(OurMachine.next_instruction,tmp));
+    }
 
-    graphic = op<<11 + OurMachine.get_reg_index(reg)<<8 + addr;
+    graphic = (op<<11) + (OurMachine.get_reg_index(reg)<<8) + addr;
+  }
+  else if(instr == "jmpz" or instr == "jmpn")
+  {
+    string tmp,reg;
+    int addr=0;
+    op = 8;
+
+    if(instr == "jmpn") op = 9;
+
+    cin>>reg;
+    cin>>tmp;
+
+    if(numerical(tmp)) addr = string_to_int(tmp);
+    else
+    {
+      if(OurMachine.islabel(tmp))
+      {
+        addr = OurMachine.get_addr_from_label(tmp);
+      }
+      else label_pendencies.push_back(make_pair(OurMachine.next_instruction,tmp));
+    }
+
+    graphic = (op<<11) + (OurMachine.get_reg_index(reg)<<8) + addr;
   }
   else if(instr == "add" or instr == "subtract" or instr == "multiply" or instr == "divide" or instr == "move" or instr == "load" or instr == "store" or instr == "negate")
   {
@@ -145,8 +211,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr)
     else if(instr == "negate") op = 15;
 
     cin>>reg1>>reg2;
-
-    graphic = op<<11 + OurMachine.get_reg_index(reg1)<<8 + OurMachine.get_reg_index(reg2)<<5;
+    graphic = (op<<11) + (OurMachine.get_reg_index(reg1)<<8) + (OurMachine.get_reg_index(reg2)<<5);
   }
   else if(instr == "jump")
   {
@@ -157,9 +222,16 @@ void assemble(Swombat &OurMachine, string &label, string &instr)
     cin>>tmp;
 
     if(numerical(tmp)) addr = string_to_int(tmp);
-    else addr = OurMachine.get_addr_from_data(tmp);
 
-    graphic = op<<11 + addr;
+    else
+    {
+      if(OurMachine.islabel(tmp))
+      {
+        addr = OurMachine.get_addr_from_data(tmp);
+      }
+      else label_pendencies.push_back(make_pair(OurMachine.next_instruction,tmp));
+    }
+    graphic = (op<<11) + addr;
   }
   else if(instr == "loadc" or instr == "addi")
   {
@@ -171,7 +243,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr)
     cin>>reg;
     cin>>constant_value;
 
-    graphic = op<<11 + OurMachine.get_reg_index(reg)<<8 + constant_value;
+    graphic = (op<<11) + (OurMachine.get_reg_index(reg)<<8) + constant_value;
 
   }
   else if(instr == "clear" or instr == "push" or instr == "pop")
@@ -183,21 +255,28 @@ void assemble(Swombat &OurMachine, string &label, string &instr)
     
     cin>>reg;
 
-    graphic = op<<11 + OurMachine.get_reg_index(reg)<<8;
+    graphic = (op<<11) + (OurMachine.get_reg_index(reg)<<8);
   }
   else if(instr == "call")
   {
     string label;
     op = 19;
-
+    int addr=0;
     cin>>label;
-    
-    graphic = op<<11 + OurMachine.get_addr_from_label(label);
+    if(OurMachine.islabel(label))
+    {
+      addr=OurMachine.get_addr_from_label(label);
+    }
+    else
+    {
+      label_pendencies.push_back(make_pair(OurMachine.next_instruction,label));
+    }
+    graphic = (op<<11) + addr;
   }
   else if(instr == "return")
   {
     op = 20;
-    graphic = op<<11;
+    graphic = (op<<11);
   }
   else if(instr == ".data")
   {
@@ -212,7 +291,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr)
   
 }
 
-bool read_instruction(Swombat &OurMachine)
+bool read_instruction(Swombat &OurMachine, vector< pair< int, string > > &label_pendencies, vector< pair< int, string> > &data_pendencies)
 {
   string label,instr;
   cin>>label;
@@ -227,16 +306,18 @@ bool read_instruction(Swombat &OurMachine)
     instr = label;//se nao houver label, a primeira palavra eh instrucao
     label.clear();
   }
-  assemble(OurMachine,label,instr);
+  assemble(OurMachine,label,instr,label_pendencies,data_pendencies);
   return true;
 }
+
 
 int main()
 {
   Swombat OurMachine;
   OurMachine.get_started();
-
-  while(read_instruction(OurMachine));//le as instrucoes enquanto houver
-
+  vector< pair< int, string > > label_pendencies, data_pendencies;
+  while(read_instruction(OurMachine,label_pendencies,data_pendencies));//le as instrucoes enquanto houver
+  OurMachine.solve_pendencies(label_pendencies,data_pendencies);
+  OurMachine.print();
   return 0;
 }
