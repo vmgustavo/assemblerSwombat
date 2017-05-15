@@ -19,6 +19,22 @@ string to_low(string &a)
   return ret;
 }
 
+char get_hex(int v)
+{
+  if(v<10) return (char)('0' + v);
+  else return (char)('A'+v-10);
+}
+
+
+string to_hex(int v)
+{
+  string ret;
+  ret.resize(2);
+  ret[0] = get_hex(v/16);
+  ret[1] = get_hex(v%16);
+  return ret;
+}
+
 class Swombat{
   private:
 
@@ -36,10 +52,12 @@ class Swombat{
     {
       for(int i = 0;i <= 7;i++)
       {
-        string tmp = "R";
+        string tmp = "A";
         tmp.push_back('0' + i);
         index_of_registers[tmp] = index_of_registers[to_low(tmp)] = i;
       }
+      data_to_pos["IO"] = 254;
+      data_to_pos["io"] = 254;
     }
 
     void get_started()
@@ -68,11 +86,13 @@ class Swombat{
 
     int get_addr_from_data(string &s)
     {
+      if(!isdata(s)) cerr<<s<<" is not a data"<<endl;
       return data_to_pos[s];
     }
 
     int get_addr_from_label(string &s)
     {
+      if(!islabel(s)) cerr<<s<<" is not a label"<<endl;
       return label_to_pos[s];
     }
 
@@ -110,10 +130,18 @@ class Swombat{
 
     void print()
     {
-      for(int v : memory)
+      cout<<"DEPTH = "<<mem_size<<";"<<endl;
+      cout<<"WIDTH = 8;"<<endl;
+      cout<<"ADDRESS_RADIX = HEX;"<<endl;
+      cout<<"DATA_RADIX = BIN"<<endl;
+      cout<<"CONTENT"<<endl<<"BEGIN"<<endl<<endl;
+      for(int i = 0;i < mem_size;i++)
       {
+        int v = memory[i];
+        cout<<to_hex(i)<<" : ";
         bitset<8> to_print(v);
-        cout<<to_print<<endl;
+        cout<<to_print<<";";
+        cout<<" --"<<endl;
       }
     }
 };
@@ -178,7 +206,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< i
   else if(instr == "jmpz" or instr == "jmpn")
   {
     string tmp,reg;
-    int addr=0;
+    int addr = 0;
     op = 8;
 
     if(instr == "jmpn") op = 9;
@@ -216,7 +244,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< i
   else if(instr == "jump")
   {
     string tmp;
-    int addr;
+    int addr = 0;
     op = 7;
 
     cin>>tmp;
@@ -227,7 +255,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< i
     {
       if(OurMachine.islabel(tmp))
       {
-        addr = OurMachine.get_addr_from_data(tmp);
+        addr = OurMachine.get_addr_from_label(tmp);
       }
       else label_pendencies.push_back(make_pair(OurMachine.next_instruction,tmp));
     }
@@ -259,17 +287,17 @@ void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< i
   }
   else if(instr == "call")
   {
-    string label;
+    string tmp;
     op = 19;
-    int addr=0;
-    cin>>label;
-    if(OurMachine.islabel(label))
+    int addr = 0;
+    cin>>tmp;
+    if(OurMachine.islabel(tmp))
     {
-      addr=OurMachine.get_addr_from_label(label);
+      addr=OurMachine.get_addr_from_label(tmp);
     }
     else
     {
-      label_pendencies.push_back(make_pair(OurMachine.next_instruction,label));
+      label_pendencies.push_back(make_pair(OurMachine.next_instruction,tmp));
     }
     graphic = (op<<11) + addr;
   }
@@ -298,7 +326,7 @@ bool read_instruction(Swombat &OurMachine, vector< pair< int, string > > &label_
   if(cin.eof()) return false;
   if(is_label(label))
   {
-    label = label.substr(1,label.size() - 2);//trata o label
+    label = label.substr(0,label.size() - 1);//trata o label
     cin>>instr;
   }
   else
