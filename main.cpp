@@ -136,7 +136,7 @@ class Swombat{
       cout<<"DEPTH = "<<mem_size<<";"<<endl;
       cout<<"WIDTH = 8;"<<endl;
       cout<<"ADDRESS_RADIX = HEX;"<<endl;
-      cout<<"DATA_RADIX = BIN"<<endl;
+      cout<<"DATA_RADIX = BIN;"<<endl;
       cout<<"CONTENT"<<endl<<"BEGIN"<<endl<<endl;
       for(int i = 0;i < mem_size;i++)
       {
@@ -146,6 +146,7 @@ class Swombat{
         cout<<to_print<<";";
         cout<<" --"<<endl;
       }
+      cout<<"END;"<<endl;
     }
 };
 
