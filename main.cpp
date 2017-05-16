@@ -2,7 +2,6 @@
 #include<stdlib.h>
 #include<vector>
 #include<bitset>
-#include<bits/stdc++.h>
 #include<map>
 using namespace std;
 
@@ -63,8 +62,8 @@ class Swombat{
     void get_started()
     {
       next_instruction = 0;
-      last_free = mem_size - 3;
       mem_size = 256;
+      last_free = mem_size - 3;
       generate_indexes();
       memory.resize(mem_size,0);
     }
@@ -116,15 +115,19 @@ class Swombat{
       
       for(auto pend : data_pendencies)
       {
-        memory[pend.first] += memory[get_addr_from_data(pend.second)];
+        cerr<<"instr = "<<pend.first<<" need "<<pend.second<<endl;
+        memory[pend.first+1] += get_addr_from_data(pend.second);
       }
     }
 
     void allocate(string &label, int num_bytes, int value)
     {
-      if(num_bytes==0) return;
-      else if(num_bytes==1) data_to_pos[label]=last_free;
-      memory[last_free--]=value%(1<<8);
+      if(num_bytes == 0) return;
+      else if(num_bytes == 1)
+      {
+        data_to_pos[label] = last_free;
+      }
+      memory[last_free--] = value%(1<<8);
       allocate(label, num_bytes-1,(value>>8));
     }
 
@@ -311,6 +314,7 @@ void assemble(Swombat &OurMachine, string &label, string &instr, vector< pair< i
     int num_bytes,value;
     cin>>num_bytes>>value;
     OurMachine.allocate(label,num_bytes,value);
+    read_comments();
     return;
   }
   else cerr<<instr<<" nao eh uma instrucao valida.\n";
@@ -339,8 +343,18 @@ bool read_instruction(Swombat &OurMachine, vector< pair< int, string > > &label_
 }
 
 
-int main()
+int main(int argc, char* argv[])
 {
+  if(argc!=3)
+  {
+    cerr<<"Usage:"<<endl;
+    cerr<<argv[0]<<" [input file name] [output file name]"<<endl;
+    return 1;
+  }
+  string output_filename = argv[2];
+  output_filename += ".mif";
+  freopen(argv[1], "r", stdin);
+  freopen(output_filename.c_str(), "w", stdout);
   Swombat OurMachine;
   OurMachine.get_started();
   vector< pair< int, string > > label_pendencies, data_pendencies;
